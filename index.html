@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>자재 입고 검색</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --ink:#1C2126;
+    --ink-soft:#5B6470;
+    --paper:#EDF0EF;
+    --surface:#FFFFFF;
+    --line:#DBE0DE;
+    --accent:#FF6A13;
+    --accent-deep:#B94F0E;
+    --accent-wash:#FFE7D6;
+    --ok:#1F8A4C;
+    --ok-wash:#E1F3E7;
+    --warn:#B9790A;
+    --warn-wash:#FCEFD4;
+    --danger:#D93B2B;
+    --danger-wash:#FBE1DE;
+    --muted:#8A9099;
+    --muted-wash:#E7E9EA;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:transparent;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",Roboto,sans-serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+  }
+  #phone{
+    width:100%;
+    max-width:430px;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:30;
+    background:var(--ink);
+    color:#fff;
+    padding:14px 16px 12px;
+    border-radius:0 0 18px 18px;
+    box-shadow:0 6px 16px rgba(0,0,0,.18);
+  }
+  .topbar-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .brand{display:flex; align-items:baseline; gap:8px;}
+  .brand .tag{
+    background:var(--accent); color:#fff; font-size:11px; font-weight:800;
+    padding:2px 7px; border-radius:5px; letter-spacing:.02em;
+  }
+  .brand h1{font-size:17px; margin:0; font-weight:800; letter-spacing:-.01em;}
+  .icon-btn{
+    width:34px; height:34px; border-radius:9px; border:1px solid rgba(255,255,255,.18);
+    background:rgba(255,255,255,.08); color:#fff; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex:none;
+  }
+  .icon-btn:active{transform:scale(.94);}
+  .searchwrap{margin-top:12px; position:relative;}
+  .searchwrap input{
+    width:100%; padding:11px 14px 11px 38px; border-radius:11px; border:none;
+    background:#fff; color:var(--ink); font-size:15px; outline:none;
+  }
+  .searchwrap input::placeholder{color:#9AA0A6;}
+  .searchwrap svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); opacity:.55;}
+  .searchwrap .clear{
+    position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    width:22px;height:22px;border-radius:50%;background:#E7E9EA;border:none;color:#5B6470;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;
+  }
+
+  /* ---------- chips ---------- */
+  .chiprow{
+    display:flex; gap:7px; overflow-x:auto; padding:12px 16px 4px;
+    scrollbar-width:none;
+  }
+  .chiprow::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:none; padding:7px 13px; border-radius:999px; font-size:13px; font-weight:600;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink-soft); cursor:pointer;
+    white-space:nowrap;
+  }
+  .chip.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+
+  .statustabs{display:flex; gap:6px; padding:8px 16px 2px;}
+  .stab{
+    flex:1; text-align:center; padding:8px 4px; border-radius:10px; font-size:12.5px; font-weight:700;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink-soft); cursor:pointer;
+  }
+  .stab .dot{display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+  .stab.active{border-color:var(--ink); color:var(--ink); background:#fff; box-shadow:inset 0 0 0 1.5px var(--ink);}
+
+  /* ---------- meta / sync bar ---------- */
+  .metabar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 16px 2px; font-size:12px; color:var(--ink-soft);
+  }
+  .metabar .refresh{
+    display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:700; color:var(--accent-deep);
+  }
+
+  /* ---------- list ---------- */
+  .list{padding:10px 14px 100px; display:flex; flex-direction:column; gap:10px;}
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:13px 14px; position:relative; overflow:hidden;
+    animation:rise .28s ease both;
+  }
+  @keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+  .card-top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .item-name{font-size:15.5px; font-weight:800; line-height:1.35; letter-spacing:-.01em;}
+  .item-sub{font-size:12.5px; color:var(--ink-soft); margin-top:2px;}
+  .site-badge{
+    font-size:10.5px; font-weight:700; color:var(--ink-soft); background:var(--muted-wash);
+    padding:2px 7px; border-radius:6px; white-space:nowrap; margin-top:1px;
+  }
+  .vendor-row{
+    margin-top:9px; font-size:13px; color:var(--ink); font-weight:600;
+    display:flex; align-items:center; gap:5px;
+  }
+  .vendor-row svg{opacity:.5;}
+  .qty-row{display:flex; gap:8px; margin-top:10px;}
+  .qty-box{
+    flex:1; background:var(--paper); border-radius:9px; padding:7px 8px; text-align:center;
+  }
+  .qty-box .num{font-size:15px; font-weight:800; letter-spacing:-.02em;}
+  .qty-box .lbl{font-size:10.5px; color:var(--ink-soft); margin-top:1px; font-weight:600;}
+  .qty-box.remain .num{color:var(--danger);}
+  .qty-box.remain.zero .num{color:var(--ok);}
+
+  .status-pill{
+    position:absolute; top:12px; right:13px; font-size:11px; font-weight:800; padding:4px 9px 4px 7px;
+    border-radius:7px; display:flex; align-items:center; gap:4px;
+  }
+  .status-pill .dot{width:6px; height:6px; border-radius:50%;}
+  .status-pill.complete{background:var(--ok-wash); color:var(--ok);}
+  .status-pill.partial{background:var(--warn-wash); color:var(--warn);}
+  .status-pill.pending{background:var(--danger-wash); color:var(--danger);}
+  .status-pill.unknown{background:var(--muted-wash); color:var(--ink-soft);}
+
+  /* stamp — signature element, complete status only, shown inside card footer */
+  .stamp{
+    position:absolute; bottom:8px; right:10px; transform:rotate(-9deg);
+    border:2px solid var(--ok); color:var(--ok); border-radius:8px;
+    font-size:10px; font-weight:900; letter-spacing:.06em; padding:2px 7px;
+    opacity:.55; pointer-events:none;
+  }
+  .stamp::before{content:"✓ ";}
+
+  .date-row{font-size:11.5px; color:var(--ink-soft); margin-top:8px; display:flex; gap:12px;}
+
+  /* ---------- empty / loading ---------- */
+  .empty{
+    text-align:center; padding:60px 30px; color:var(--ink-soft);
+  }
+  .empty .big{font-size:38px; margin-bottom:10px;}
+  .empty h3{font-size:15px; color:var(--ink); margin:0 0 6px;}
+  .empty p{font-size:13px; line-height:1.6; margin:0;}
+
+  .skeleton{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); height:96px;
+    position:relative; overflow:hidden;
+  }
+  .skeleton::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent, rgba(0,0,0,.05), transparent);
+    animation:shine 1.3s infinite;
+  }
+  @keyframes shine{from{transform:translateX(-100%);} to{transform:translateX(100%);}}
+
+  /* ---------- FAB / bottom nav ---------- */
+  .bottomnav{
+    position:sticky; bottom:0; z-index:30;
+    background:rgba(255,255,255,.92); backdrop-filter:blur(6px);
+    border-top:1px solid var(--line);
+    display:flex; padding:8px 10px 12px;
+  }
+  .navitem{
+    flex:1; text-align:center; padding:6px 4px; border-radius:10px; cursor:pointer;
+    color:var(--ink-soft); font-size:11px; font-weight:700;
+  }
+  .navitem.active{color:var(--accent-deep);}
+  .navitem .icowrap{margin-bottom:2px;}
+
+  /* ---------- settings sheet ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:50; display:none;
+    align-items:flex-end; justify-content:center;
+  }
+  .overlay.open{display:flex;}
+  .sheet{
+    width:100%; max-width:430px; background:#fff; border-radius:20px 20px 0 0;
+    padding:18px 18px 26px; max-height:86vh; overflow-y:auto;
+    animation:up .22s ease both;
+  }
+  @keyframes up{from{transform:translateY(20px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .sheet h2{font-size:16px; margin:0 0 3px;}
+  .sheet .desc{font-size:12.5px; color:var(--ink-soft); line-height:1.6; margin:0 0 14px;}
+  .field label{font-size:12.5px; font-weight:700; color:var(--ink-soft); display:block; margin-bottom:5px;}
+  .field input[type=text]{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; font-size:14px;
+    outline:none; margin-bottom:14px;
+  }
+  .field input[type=text]:focus{border-color:var(--accent);}
+  .sitecfg{border:1px solid var(--line); border-radius:11px; padding:4px 10px; margin-bottom:14px;}
+  .sitecfg-row{
+    display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--paper);
+  }
+  .sitecfg-row:last-child{border-bottom:none;}
+  .sitecfg-row input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent); flex:none;}
+  .sitecfg-row input[type=text]{
+    flex:1; border:none; background:transparent; font-size:13.5px; padding:2px; outline:none; font-weight:600;
+  }
+  .btnrow{display:flex; gap:8px; margin-top:4px;}
+  .btn{
+    flex:1; padding:12px; border-radius:11px; border:none; font-size:14px; font-weight:800; cursor:pointer;
+  }
+  .btn.primary{background:var(--accent); color:#fff;}
+  .btn.primary:active{background:var(--accent-deep);}
+  .btn.ghost{background:var(--paper); color:var(--ink);}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:10px; line-height:1.6;}
+  .hint b{color:var(--ink-soft);}
+  .errbox{
+    background:var(--danger-wash); color:var(--danger); font-size:12.5px; padding:9px 11px; border-radius:9px;
+    margin-bottom:12px; line-height:1.6; display:none;
+  }
+  .errbox.show{display:block;}
+</style>
+</head>
+<body>
+<div id="phone">
+
+  <div class="topbar">
+    <div class="topbar-row">
+      <div class="brand"><span class="tag">성건 구매부</span><h1>자재 입고 검색</h1></div>
+      <button class="icon-btn" id="settingsBtn" title="연동 설정">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+    <div class="searchwrap">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A9099" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="searchInput" type="text" placeholder="업체명 · 품명 · 사이즈 검색">
+      <button class="clear" id="clearBtn" style="display:none;">✕</button>
+    </div>
+  </div>
+
+  <div class="chiprow" id="siteChips"></div>
+  <div class="statustabs" id="statusTabs">
+    <div class="stab active" data-status="all">전체</div>
+    <div class="stab" data-status="complete"><span class="dot" style="background:#1F8A4C"></span>완료</div>
+    <div class="stab" data-status="partial"><span class="dot" style="background:#B9790A"></span>부분</div>
+    <div class="stab" data-status="pending"><span class="dot" style="background:#D93B2B"></span>미입고</div>
+  </div>
+
+  <div class="metabar">
+    <span id="resultCount">0건</span>
+    <span class="refresh" id="refreshBtn">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+      새로고침
+    </span>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="bottomnav">
+    <div class="navitem active"><div class="icowrap">🔎</div>검색</div>
+    <div class="navitem" id="navPending"><div class="icowrap">📦</div>미입고 현황</div>
+    <div class="navitem" id="navRecent"><div class="icowrap">🕘</div>최근 검색</div>
+  </div>
+</div>
+
+<!-- settings sheet -->
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <h2>Google Sheets 연동</h2>
+    <p class="desc">시트를 <b>"링크가 있는 모든 사용자 - 뷰어"</b>로 공유한 뒤, 시트 URL 또는 ID를 입력하세요. 아래 목록에서 실제 탭 이름과 다르면 직접 수정해 주세요.</p>
+    <div class="errbox" id="errBox"></div>
+    <div class="field">
+      <label>Google Sheet URL 또는 ID</label>
+      <input type="text" id="sheetIdInput" placeholder="예: https://docs.google.com/spreadsheets/d/1AbC.../edit">
+    </div>
+    <div class="field">
+      <label>조회할 현장(탭) 목록</label>
+      <div class="sitecfg" id="siteCfgList"></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn ghost" id="demoBtn">샘플 데이터로 미리보기</button>
+      <button class="btn primary" id="connectBtn">연동하기</button>
+    </div>
+    <p class="hint"><b>동작 방식(B안):</b> 이 화면은 별도 서버 없이, 브라우저에서 Google Sheets를 CSV로 직접 읽어와(gviz 엔드포인트) 표준 스키마로 변환·검색합니다. 실제 배포 시에는 캐싱 서버를 두어 응답 속도와 안정성을 더 높이는 것을 권장합니다.</p>
+  </div>
+</div>
+
+<script>
+const DEFAULT_SITES = ["그린동 P4","그린동P5","2공장","본사","탕정A4 2L PH3","BAC TOWER","용인한수 PH2","고덕한양","용인한수","용인 한성"];
+const STORAGE_KEY = "sheet-config";
+
+let state = {
+  records: [],
+  siteFilter: "all",
+  statusFilter: "all",
+  query: "",
+  loading: false,
+  lastSync: null,
+  sites: DEFAULT_SITES.map(n => ({ name: n, enabled: true })),
+  sheetId: "",
+};
+
+// ---------- persistence ----------
+async function loadConfig(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const cfg = JSON.parse(raw);
+      state.sheetId = cfg.sheetId || "";
+      state.sites = cfg.sites || state.sites;
+    }
+  }catch(e){ /* no saved config yet */ }
+}
+async function saveConfig(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sheetId: state.sheetId, sites: state.sites }));
+  }catch(e){ console.error("설정 저장 실패", e); }
+}
+
+// ---------- helpers ----------
+function extractSheetId(input){
+  const m = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if(m) return m[1];
+  return input.trim();
+}
+function normalize(s){ return (s||"").toString().trim(); }
+function parseNumber(v){
+  if(v === null || v === undefined) return null;
+  const s = v.toString().replace(/,/g,"").trim();
+  if(s === "" || s === "-") return null;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function findHeaderRow(rows){
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const row = rows[i].map(normalize);
+    if(row.some(c=>c.includes("업체명")) && row.some(c=>c.includes("품명"))) return i;
+  }
+  return -1;
+}
+function pickCol(headers, used, keywords){
+  for(let k of keywords){
+    const idx = headers.findIndex((h,i)=> !used.has(i) && h.includes(k));
+    if(idx !== -1){ used.add(idx); return idx; }
+  }
+  return -1;
+}
+function mapSheetToRecords(siteName, rows){
+  const headerIdx = findHeaderRow(rows);
+  if(headerIdx === -1) return [];
+  const headers = rows[headerIdx].map(normalize);
+  const used = new Set();
+  const col = {
+    remain: pickCol(headers, used, ["미입고량"]),
+    r1qty: pickCol(headers, used, ["1차입고 수량","1차입고수량"]),
+    r1date: pickCol(headers, used, ["1차입고일"]),
+    r2qty: pickCol(headers, used, ["2차입고 수량","2차입고수량"]),
+    r2date: pickCol(headers, used, ["2차입고일"]),
+    rdate: pickCol(headers, used, ["입고된 날짜","입고일"]),
+    rqty: pickCol(headers, used, ["입고수량","입고량"]),
+    odate: pickCol(headers, used, ["발주한 날짜","발주일"]),
+    reqdate: pickCol(headers, used, ["요청일"]),
+    vendor: pickCol(headers, used, ["업체명"]),
+    item: pickCol(headers, used, ["품명"]),
+    size: pickCol(headers, used, ["사이즈"]),
+    material: pickCol(headers, used, ["재질"]),
+    oqty: pickCol(headers, used, ["발주수량","요청수량","수량"]),
+  };
+  const out = [];
+  for(let r = headerIdx+1; r < rows.length; r++){
+    const row = rows[r];
+    if(!row) continue;
+    const vendor = col.vendor!==-1 ? normalize(row[col.vendor]) : "";
+    const item = col.item!==-1 ? normalize(row[col.item]) : "";
+    if(!vendor && !item) continue;
+
+    const orderQty = col.oqty!==-1 ? parseNumber(row[col.oqty]) : null;
+    const remainCol = col.remain!==-1 ? parseNumber(row[col.remain]) : null;
+    const r1 = col.r1qty!==-1 ? parseNumber(row[col.r1qty]) : null;
+    const r2 = col.r2qty!==-1 ? parseNumber(row[col.r2qty]) : null;
+    const rqtyGeneric = col.rqty!==-1 ? parseNumber(row[col.rqty]) : null;
+    let receivedQty = null;
+    if(r1!==null || r2!==null) receivedQty = (r1||0)+(r2||0);
+    else if(rqtyGeneric!==null) receivedQty = rqtyGeneric;
+
+    let remaining = remainCol;
+    if(remaining===null && orderQty!==null && receivedQty!==null) remaining = orderQty - receivedQty;
+
+    const lastReceivedDate = (col.r2date!==-1 && normalize(row[col.r2date])) ||
+                              (col.r1date!==-1 && normalize(row[col.r1date])) ||
+                              (col.rdate!==-1 && normalize(row[col.rdate])) || "";
+
+    let status;
+    if(remaining !== null){
+      status = remaining <= 0 ? "complete" : (receivedQty>0 || lastReceivedDate ? "partial" : "pending");
+    } else if(lastReceivedDate){
+      status = "complete";
+    } else if(col.remain===-1 && col.r1qty===-1 && col.r2qty===-1 && col.rdate===-1 && col.rqty===-1){
+      status = "unknown"; // this site sheet has no receiving columns at all
+    } else {
+      status = "pending";
+    }
+
+    out.push({
+      site: siteName,
+      vendor: vendor || "-",
+      item: item || "-",
+      size: col.size!==-1 ? normalize(row[col.size]) : "",
+      material: col.material!==-1 ? normalize(row[col.material]) : "",
+      orderDate: (col.odate!==-1 && normalize(row[col.odate])) || (col.reqdate!==-1 && normalize(row[col.reqdate])) || "",
+      orderQty, receivedQty, remaining, lastReceivedDate, status,
+    });
+  }
+  return out;
+}
+
+async function fetchSiteCsv(sheetId, siteName){
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(siteName)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(`${siteName}: HTTP ${res.status}`);
+  const text = await res.text();
+  if(text.trim().startsWith("<")) throw new Error(`${siteName}: 접근 불가 (공유 설정 확인 필요)`);
+  const parsed = Papa.parse(text.trim(), { skipEmptyLines: false });
+  return parsed.data;
+}
+
+async function connectToSheets(){
+  const errBox = document.getElementById("errBox");
+  errBox.classList.remove("show"); errBox.textContent = "";
+  const raw = document.getElementById("sheetIdInput").value.trim();
+  if(!raw){ errBox.textContent = "Sheet URL 또는 ID를 입력해 주세요."; errBox.classList.add("show"); return; }
+  state.sheetId = extractSheetId(raw);
+  state.sites = readSiteCfgFromUI();
+  await saveConfig();
+
+  setLoading(true);
+  closeSheet();
+  const enabled = state.sites.filter(s=>s.enabled);
+  const results = await Promise.allSettled(enabled.map(s => fetchSiteCsv(state.sheetId, s.name)));
+
+  let all = [];
+  let failed = [];
+  results.forEach((r, i) => {
+    if(r.status === "fulfilled"){
+      all = all.concat(mapSheetToRecords(enabled[i].name, r.value));
+    } else {
+      failed.push(enabled[i].name);
+    }
+  });
+
+  state.records = all;
+  state.lastSync = new Date();
+  setLoading(false);
+  render();
+
+  if(failed.length === enabled.length && enabled.length > 0){
+    showToastError(`전체 현장 연동 실패. 이 화면을 Claude 채팅창 안에서 미리보기로 테스트 중이라면, 보안 샌드박스가 외부 네트워크 요청을 막고 있어서일 가능성이 높습니다. 이 HTML 파일을 다운로드해 실제 웹서버(GitHub Pages, 사내 서버, 또는 로컬 "python -m http.server")에서 열어 다시 시도해 보세요.`);
+  } else if(failed.length){
+    showToastError(`일부 현장 연동 실패: ${failed.join(", ")} — 해당 탭 이름이 실제 시트와 일치하는지 확인하세요.`);
+  }
+}
+
+function showToastError(msg){
+  const errBox = document.getElementById("errBox");
+  errBox.textContent = msg;
+  errBox.classList.add("show");
+  openSheet();
+}
+
+// ---------- demo data ----------
+function loadDemoData(){
+  const demo = [
+    {site:"용인한수", vendor:"대상시너스", item:"볼트형 U-BAND", size:'1/2"×100A(70mm)', material:"", orderDate:"2026-06-11", orderQty:13, receivedQty:13, remaining:0, lastReceivedDate:"2026-06-14", status:"complete"},
+    {site:"용인한수", vendor:"대상시너스", item:"U-BOLT/검정/코팅", size:'1/2"×200A+20mm', material:"", orderDate:"2026-03-03", orderQty:40, receivedQty:40, remaining:0, lastReceivedDate:"2026-03-09", status:"complete"},
+    {site:"용인한수", vendor:"우성볼트", item:"스테인리스 볼트세트", size:"M12×50", material:"SUS304", orderDate:"2026-06-20", orderQty:200, receivedQty:120, remaining:80, lastReceivedDate:"2026-06-25", status:"partial"},
+    {site:"용인 한성", vendor:"광명상사", item:"PLATE", size:"500X300X3T", material:"PVC", orderDate:"2025-01-05", orderQty:2, receivedQty:2, remaining:0, lastReceivedDate:"2026-01-05", status:"complete"},
+    {site:"탕정A4 2L PH3", vendor:"엠엠피", item:"PIPE", size:"32A", material:"C-PVC", orderDate:"2026-06-25", orderQty:3, receivedQty:null, remaining:null, lastReceivedDate:"", status:"pending"},
+    {site:"탕정A4 2L PH3", vendor:"엠엠피", item:"90' ELBOW", size:"20A", material:"C-PVC", orderDate:"2026-06-25", orderQty:30, receivedQty:null, remaining:null, lastReceivedDate:"", status:"pending"},
+    {site:"그린동 P4", vendor:"제일레이저", item:"PLATE", size:"90X40X10T", material:"SS275", orderDate:"2025-11-14", orderQty:132, receivedQty:null, remaining:null, lastReceivedDate:"", status:"unknown"},
+    {site:"그린동 P4", vendor:"금영강재", item:"각파이프(블랙)", size:"40X40X1.6T", material:"SS275", orderDate:"2025-11-14", orderQty:48, receivedQty:null, remaining:null, lastReceivedDate:"", status:"unknown"},
+    {site:"BAC TOWER", vendor:"대덕 AMT", item:"절곡비", size:"100*100*2252", material:"", orderDate:"2026-05-07", orderQty:6, receivedQty:null, remaining:null, lastReceivedDate:"", status:"unknown"},
+    {site:"2공장", vendor:"배관제일", item:"PIPE", size:"A40", material:"STS304", orderDate:"2024-10-08", orderQty:15, receivedQty:15, remaining:0, lastReceivedDate:"2024-10-10", status:"complete"},
+    {site:"그린동P5", vendor:"현주컴퓨터", item:"업무용 컴퓨터 외1", size:"", material:"", orderDate:"2026-04-08", orderQty:1, receivedQty:null, remaining:1, lastReceivedDate:"", status:"pending"},
+    {site:"고덕한양", vendor:"삼정철물", item:"앵글", size:"40X40X3T", material:"SS275", orderDate:"2026-05-02", orderQty:60, receivedQty:20, remaining:40, lastReceivedDate:"2026-05-10", status:"partial"},
+  ];
+  state.records = demo;
+  state.lastSync = new Date();
+  closeSheet();
+  render();
+}
+
+// ---------- UI ----------
+function setLoading(v){ state.loading = v; render(); }
+
+function readSiteCfgFromUI(){
+  const rows = document.querySelectorAll(".sitecfg-row");
+  return Array.from(rows).map(row => ({
+    name: row.querySelector("input[type=text]").value.trim(),
+    enabled: row.querySelector("input[type=checkbox]").checked,
+  })).filter(s => s.name);
+}
+function renderSiteCfg(){
+  const wrap = document.getElementById("siteCfgList");
+  wrap.innerHTML = state.sites.map(s => `
+    <div class="sitecfg-row">
+      <input type="checkbox" ${s.enabled?"checked":""}>
+      <input type="text" value="${s.name.replace(/"/g,'&quot;')}">
+    </div>`).join("");
+  document.getElementById("sheetIdInput").value = state.sheetId || "";
+}
+
+function buildSiteChips(){
+  const sites = ["all", ...Array.from(new Set(state.records.map(r=>r.site)))];
+  const wrap = document.getElementById("siteChips");
+  if(state.records.length === 0){ wrap.innerHTML = ""; return; }
+  wrap.innerHTML = sites.map(s => `
+    <div class="chip ${state.siteFilter===s?"active":""}" data-site="${s}">${s==="all"?"전체 현장":s}</div>
+  `).join("");
+  wrap.querySelectorAll(".chip").forEach(el=>{
+    el.addEventListener("click", ()=>{ state.siteFilter = el.dataset.site; render(); });
+  });
+}
+
+function statusMeta(s){
+  return {
+    complete:{label:"입고완료", cls:"complete"},
+    partial:{label:"부분입고", cls:"partial"},
+    pending:{label:"미입고", cls:"pending"},
+    unknown:{label:"정보없음", cls:"unknown"},
+  }[s];
+}
+
+function filteredRecords(){
+  const q = state.query.trim().toLowerCase();
+  return state.records.filter(r=>{
+    if(state.siteFilter!=="all" && r.site!==state.siteFilter) return false;
+    if(state.statusFilter!=="all" && r.status!==state.statusFilter) return false;
+    if(q){
+      const hay = `${r.vendor} ${r.item} ${r.size} ${r.material}`.toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function cardHtml(r){
+  const meta = statusMeta(r.status);
+  const remainDisplay = r.remaining===null||r.remaining===undefined ? "-" : r.remaining;
+  const zero = r.remaining!==null && r.remaining<=0;
+  return `
+    <div class="card">
+      <span class="status-pill ${meta.cls}"><span class="dot" style="background:currentColor"></span>${meta.label}</span>
+      <div class="card-top">
+        <div>
+          <div class="item-name">${r.item}${r.size?` <span style="font-weight:600;color:var(--ink-soft);font-size:13px;">· ${r.size}</span>`:""}</div>
+          <div class="item-sub">${r.material||""}</div>
+        </div>
+      </div>
+      <div class="site-badge">${r.site}</div>
+      <div class="vendor-row">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg>
+        ${r.vendor}
+      </div>
+      <div class="qty-row">
+        <div class="qty-box"><div class="num">${r.orderQty ?? "-"}</div><div class="lbl">발주수량</div></div>
+        <div class="qty-box"><div class="num">${r.receivedQty ?? "-"}</div><div class="lbl">입고수량</div></div>
+        <div class="qty-box remain ${zero?"zero":""}"><div class="num">${remainDisplay}</div><div class="lbl">미입고량</div></div>
+      </div>
+      <div class="date-row">
+        ${r.orderDate?`<span>발주 ${r.orderDate}</span>`:""}
+        ${r.lastReceivedDate?`<span>입고 ${r.lastReceivedDate}</span>`:""}
+      </div>
+      ${r.status==="complete"?'<div class="stamp">입고완료</div>':""}
+    </div>
+  `;
+}
+
+function render(){
+  buildSiteChips();
+  document.querySelectorAll(".stab").forEach(el=>{
+    el.classList.toggle("active", el.dataset.status===state.statusFilter);
+  });
+
+  const list = document.getElementById("list");
+  const countEl = document.getElementById("resultCount");
+
+  if(state.loading){
+    list.innerHTML = Array(4).fill('<div class="skeleton"></div>').join("");
+    countEl.textContent = "불러오는 중…";
+    return;
+  }
+
+  if(state.records.length === 0){
+    list.innerHTML = `
+      <div class="empty">
+        <div class="big">🔗</div>
+        <h3>연동된 데이터가 없어요</h3>
+        <p>오른쪽 위 설정 아이콘을 눌러 Google Sheets를 연동하거나,<br>샘플 데이터로 먼저 화면을 확인해 보세요.</p>
+      </div>`;
+    countEl.textContent = "0건";
+    return;
+  }
+
+  const items = filteredRecords();
+  countEl.textContent = state.lastSync
+    ? `${items.length}건 · ${state.lastSync.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})} 동기화`
+    : `${items.length}건`;
+
+  if(items.length === 0){
+    list.innerHTML = `
+      <div class="empty">
+        <div class="big">📭</div>
+        <h3>검색 결과가 없어요</h3>
+        <p>검색어나 필터 조건을 바꿔서 다시 찾아보세요.</p>
+      </div>`;
+    return;
+  }
+  list.innerHTML = items.map(cardHtml).join("");
+}
+
+// ---------- events ----------
+function openSheet(){ document.getElementById("overlay").classList.add("open"); renderSiteCfg(); }
+function closeSheet(){ document.getElementById("overlay").classList.remove("open"); }
+
+document.getElementById("settingsBtn").addEventListener("click", openSheet);
+document.getElementById("overlay").addEventListener("click", (e)=>{ if(e.target.id==="overlay") closeSheet(); });
+document.getElementById("connectBtn").addEventListener("click", connectToSheets);
+document.getElementById("demoBtn").addEventListener("click", loadDemoData);
+
+document.getElementById("searchInput").addEventListener("input", (e)=>{
+  state.query = e.target.value;
+  document.getElementById("clearBtn").style.display = state.query ? "flex" : "none";
+  render();
+});
+document.getElementById("clearBtn").addEventListener("click", ()=>{
+  state.query = ""; document.getElementById("searchInput").value = "";
+  document.getElementById("clearBtn").style.display = "none";
+  render();
+});
+document.getElementById("statusTabs").addEventListener("click",(e)=>{
+  const el = e.target.closest(".stab");
+  if(!el) return;
+  state.statusFilter = el.dataset.status;
+  render();
+});
+document.getElementById("refreshBtn").addEventListener("click", ()=>{
+  if(state.sheetId) connectToSheets(); else render();
+});
+document.getElementById("navPending").addEventListener("click", ()=>{
+  state.statusFilter = "pending"; state.siteFilter = "all"; render();
+  window.scrollTo({top:0,behavior:"smooth"});
+});
+document.getElementById("navRecent").addEventListener("click", ()=>{
+  document.getElementById("searchInput").focus();
+});
+
+// ---------- init ----------
+(async function init(){
+  await loadConfig();
+  render();
+})();
+</script>
+</body>
+</html>
