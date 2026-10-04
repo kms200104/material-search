@@ -29,3 +29,19 @@ pointing/emulate_touch_from_mouse=true
 [rendering]
 
 renderer/rendering_method="mobile"
+lights_and_shadows/directional_shadow/size=2048
+
+[shader_globals]
+
+world_curve_strength={
+"type": "float",
+"value": 0.004
+}
+world_curve_origin={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+toon_softness={
+"type": "float",
+"value": 0.35
+}
